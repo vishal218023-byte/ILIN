@@ -1,7 +1,20 @@
+import sys
+from pathlib import Path
+import warnings
+import logging
+
+# Add project root to Python path for imports to work
+project_root = Path(__file__).parent.parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
+# Suppress torch warnings about missing CUDA extensions
+warnings.filterwarnings('ignore', category=UserWarning, module='torch')
+logging.getLogger('torch').setLevel(logging.ERROR)
+
 import streamlit as st
 import requests
 import json
-from pathlib import Path
 import time
 
 from app.core.config import config
@@ -62,25 +75,77 @@ def init_session_state():
         st.session_state.documents = []
     if 'ollama_status' not in st.session_state:
         st.session_state.ollama_status = False
+    if 'selected_model' not in st.session_state:
+        st.session_state.selected_model = None
+    if 'available_models' not in st.session_state:
+        st.session_state.available_models = []
 
 def check_ollama_status():
+    """Check if Ollama is running and model is available."""
     try:
-        return ollama_client.check_model_available()
-    except:
-        return False
+        # First check if Ollama is running
+        if not ollama_client.check_connection():
+            return {'connected': False, 'model_available': False, 'models': []}
+        
+        # Then check if model is available
+        model_available = ollama_client.check_model_available()
+        available_models = ollama_client.list_models()
+        
+        return {
+            'connected': True,
+            'model_available': model_available,
+            'models': available_models
+        }
+    except Exception as e:
+        return {'connected': False, 'model_available': False, 'models': [], 'error': str(e)}
 
 def render_sidebar():
     with st.sidebar:
         st.markdown("<div class='main-header'>🧠 ILIN</div>", unsafe_allow_html=True)
         st.markdown("<div class='sub-header'>Integrated Localized Intelligence Node</div>", unsafe_allow_html=True)
         
-        st.session_state.ollama_status = check_ollama_status()
+        ollama_status = check_ollama_status()
+        available_models = ollama_status.get('models', [])
+        st.session_state.available_models = available_models
         
-        if st.session_state.ollama_status:
-            st.success("✅ Ollama Connected")
+        # Display Ollama status
+        if ollama_status.get('connected', False):
+            if available_models:
+                st.success(f"✅ Ollama Connected - {len(available_models)} model(s) available")
+                
+                # Model selection dropdown
+                default_model = config.ollama_model
+                
+                # Find the index of default model or use first available
+                if default_model in available_models:
+                    default_index = available_models.index(default_model)
+                else:
+                    default_index = 0
+                
+                selected_model = st.selectbox(
+                    "Select Model",
+                    available_models,
+                    index=default_index,
+                    help="Choose which Ollama model to use for responses"
+                )
+                
+                # Update the ollama client model (without triggering success message on every run)
+                if selected_model != st.session_state.selected_model:
+                    st.session_state.selected_model = selected_model
+                    ollama_client.model = selected_model
+                elif st.session_state.selected_model:
+                    # Ensure model is set even if it matches session state
+                    ollama_client.model = st.session_state.selected_model
+                
+                st.session_state.ollama_status = True
+            else:
+                st.warning("⚠️ Ollama Connected but No Models Found")
+                st.info("Pull a model with: `ollama pull llama3.2:3b`")
+                st.session_state.ollama_status = False
         else:
             st.error("❌ Ollama Not Available")
-            st.info("Make sure Ollama is running locally")
+            st.info("Start Ollama with: `ollama serve`")
+            st.session_state.ollama_status = False
         
         st.divider()
         
@@ -120,8 +185,16 @@ def render_chat_page(search_mode, top_k):
     st.markdown("<div class='sub-header'>Ask questions and get answers based on your knowledge base</div>", unsafe_allow_html=True)
     
     if not st.session_state.ollama_status:
-        st.warning("⚠️ Ollama is not connected. Please start Ollama first.")
+        st.warning("⚠️ Ollama is not ready. Please check the sidebar for details.")
+        if st.session_state.available_models:
+            st.info("Select a model from the sidebar to start chatting.")
+        else:
+            st.info("Pull a model with: `ollama pull llama3.2:3b` or any other model")
         return
+    
+    # Display current model being used
+    if st.session_state.selected_model:
+        st.caption(f"💡 Using model: **{st.session_state.selected_model}**")
     
     chat_container = st.container()
     
@@ -141,49 +214,43 @@ def render_chat_page(search_mode, top_k):
                             </div>
                             """, unsafe_allow_html=True)
     
-    if prompt := st.chat_input("Ask a question about your documents..."):
-        with st.chat_message("user"):
-            st.markdown(prompt)
-        
+    # Use a unique key for chat input to prevent duplicate processing
+    if prompt := st.chat_input("Ask a question about your documents...", key="chat_input"):
+        # Add user message to history
         st.session_state.chat_history.append({
             'role': 'user',
             'content': prompt
         })
         
-        with st.chat_message("assistant"):
-            with st.spinner("Searching and generating answer..."):
-                try:
-                    response = rag_pipeline.query(
-                        question=prompt,
-                        search_mode=search_mode,
-                        top_k=top_k,
-                        stream=False
-                    )
-                    
-                    answer = response['answer']
-                    sources = response['sources']
-                    
-                    st.markdown(answer)
-                    
-                    if sources:
-                        with st.expander("📚 View Sources"):
-                            for source in sources:
-                                st.markdown(f"""
-                                <div class='source-box'>
-                                    <strong>{source['filename']}</strong> 
-                                    <span class='score-badge'>Score: {source['relevance_score']:.3f}</span>
-                                    <br><small>Type: {source['search_type']}</small>
-                                </div>
-                                """, unsafe_allow_html=True)
-                    
-                    st.session_state.chat_history.append({
-                        'role': 'assistant',
-                        'content': answer,
-                        'sources': sources
-                    })
-                    
-                except Exception as e:
-                    st.error(f"Error: {str(e)}")
+        # Generate response
+        with st.spinner("Searching and generating answer..."):
+            try:
+                response = rag_pipeline.query(
+                    question=prompt,
+                    search_mode=search_mode,
+                    top_k=top_k,
+                    stream=False
+                )
+                
+                answer = response['answer']
+                sources = response['sources']
+                
+                # Add assistant response to history
+                st.session_state.chat_history.append({
+                    'role': 'assistant',
+                    'content': answer,
+                    'sources': sources
+                })
+                
+            except Exception as e:
+                st.session_state.chat_history.append({
+                    'role': 'assistant',
+                    'content': f"Error: {str(e)}",
+                    'sources': []
+                })
+        
+        # Rerun to display the new messages
+        st.rerun()
     
     if st.button("🗑️ Clear Conversation", type="secondary"):
         st.session_state.chat_history = []
@@ -356,15 +423,36 @@ def main():
     
     search_mode, top_k = render_sidebar()
     
-    tab1, tab2, tab3 = st.tabs(["💬 Chat", "📁 Documents", "🔍 Search"])
+    # Use session state to track selected tab instead of st.tabs for chat_input compatibility
+    if 'active_tab' not in st.session_state:
+        st.session_state.active_tab = "Chat"
     
-    with tab1:
+    # Create tab buttons (only rerun if tab actually changes)
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        if st.button("💬 Chat", use_container_width=True, type="primary" if st.session_state.active_tab == "Chat" else "secondary"):
+            if st.session_state.active_tab != "Chat":
+                st.session_state.active_tab = "Chat"
+                st.rerun()
+    with col2:
+        if st.button("📁 Documents", use_container_width=True, type="primary" if st.session_state.active_tab == "Documents" else "secondary"):
+            if st.session_state.active_tab != "Documents":
+                st.session_state.active_tab = "Documents"
+                st.rerun()
+    with col3:
+        if st.button("🔍 Search", use_container_width=True, type="primary" if st.session_state.active_tab == "Search" else "secondary"):
+            if st.session_state.active_tab != "Search":
+                st.session_state.active_tab = "Search"
+                st.rerun()
+    
+    st.divider()
+    
+    # Render the active tab
+    if st.session_state.active_tab == "Chat":
         render_chat_page(search_mode, top_k)
-    
-    with tab2:
+    elif st.session_state.active_tab == "Documents":
         render_documents_page()
-    
-    with tab3:
+    elif st.session_state.active_tab == "Search":
         render_search_page()
 
 if __name__ == "__main__":

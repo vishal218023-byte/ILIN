@@ -46,7 +46,7 @@ REM Wait a bit for API to start
 timeout /t 3 /nobreak >nul
 
 REM Start UI
-start "ILIN Web UI" cmd /k "call venv\Scripts\activate.bat && streamlit run app\ui\streamlit_app.py --server.port 8501 --server.address localhost"
+start "ILIN Web UI" cmd /k "call venv\\Scripts\\activate.bat && set PYTHONPATH=%CD% && streamlit run app\\ui\\streamlit_app.py --server.port 8501 --server.address localhost"
 
 echo.
 echo Both services started!

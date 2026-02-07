@@ -217,7 +217,19 @@ Your response:"""
             logger.error(f"Error in streaming RAG: {str(e)}")
             raise
     
+    def check_connection(self) -> bool:
+        """Check if Ollama server is running and accessible."""
+        try:
+            url = f"{self.base_url}/api/tags"
+            response = requests.get(url, timeout=5)
+            response.raise_for_status()
+            return True
+        except Exception as e:
+            logger.error(f"Error connecting to Ollama: {str(e)}")
+            return False
+    
     def check_model_available(self) -> bool:
+        """Check if the configured model is available."""
         try:
             url = f"{self.base_url}/api/tags"
             response = requests.get(url, timeout=10)

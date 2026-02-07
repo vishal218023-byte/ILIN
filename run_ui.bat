@@ -29,7 +29,8 @@ echo.
     if errorlevel 2 exit /b 1
     echo.
     echo Starting UI in DIRECT mode (bypassing API)...
-    streamlit run app\ui\streamlit_app.py --server.port 8501 --server.address localhost
+    set PYTHONPATH=%CD%
+    streamlit run app\\ui\\streamlit_app.py --server.port 8501 --server.address localhost
 ) else (
     echo [✓] API server is running
 echo.
@@ -37,7 +38,8 @@ echo.
     echo Press Ctrl+C to stop
 echo.
     
-    streamlit run app\ui\streamlit_app.py --server.port 8501 --server.address localhost
+    set PYTHONPATH=%CD%
+    streamlit run app\\ui\\streamlit_app.py --server.port 8501 --server.address localhost
 )
 
 if errorlevel 1 (
