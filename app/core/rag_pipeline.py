@@ -8,7 +8,7 @@ from app.core.document_processor import DocumentProcessor, ProcessedDocument
 from app.core.embedding_engine import embedding_engine
 from app.core.vector_store import vector_store
 from app.core.retriever import retriever, SearchResult
-from app.core.ollama_client import ollama_client, ChatResponse, RAGContext
+from app.core.llm_client import get_llm_client, ChatResponse, RAGContext
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -79,10 +79,29 @@ class RAGPipeline:
         question: str,
         search_mode: Optional[str] = None,
         top_k: Optional[int] = None,
-        stream: bool = False
+        stream: bool = False,
+        use_rag: bool = True
     ) -> Dict[str, Any]:
-        logger.info(f"Processing query: {question}")
+        logger.info(f"Processing query (RAG={use_rag}): {question}")
         
+        if not use_rag:
+            # Direct chat with LLM
+            if stream:
+                return {
+                    'stream': get_llm_client().generate(question, stream=True),
+                    'sources': [],
+                    'search_results': []
+                }
+            else:
+                response = get_llm_client().generate(question, stream=False)
+                return {
+                    'answer': response.content,
+                    'sources': [],
+                    'search_results': [],
+                    'model': response.model
+                }
+
+        # RAG Logic
         search_results = retriever.search(
             query=question,
             search_mode=search_mode,
@@ -108,12 +127,12 @@ class RAGPipeline:
         
         if stream:
             return {
-                'stream': ollama_client.chat_with_rag(question, contexts, stream=True),
+                'stream': get_llm_client().chat_with_rag(question, contexts, stream=True),
                 'sources': self._format_sources(search_results),
                 'search_results': self._format_search_results(search_results)
             }
         else:
-            response = ollama_client.chat_with_rag(question, contexts, stream=False)
+            response = get_llm_client().chat_with_rag(question, contexts, stream=False)
             
             return {
                 'answer': response.content,
@@ -121,6 +140,7 @@ class RAGPipeline:
                 'search_results': self._format_search_results(search_results),
                 'model': response.model
             }
+
     
     def search_only(
         self,

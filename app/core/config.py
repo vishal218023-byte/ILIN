@@ -1,7 +1,11 @@
 import os
 import yaml
+import logging
 from pathlib import Path
 from typing import Dict, Any, List
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 class Config:
@@ -25,6 +29,23 @@ class Config:
             else:
                 return default
         return value
+    
+    def set(self, key: str, value: Any):
+        keys = key.split('.')
+        target = self.config
+        for k in keys[:-1]:
+            if k not in target or not isinstance(target[k], dict):
+                target[k] = {}
+            target = target[k]
+        target[keys[-1]] = value
+    
+    def save(self):
+        try:
+            with open(self.config_path, 'w', encoding='utf-8') as f:
+                yaml.dump(self.config, f, default_flow_style=False, allow_unicode=True)
+            logger.info(f"Configuration saved to {self.config_path}")
+        except Exception as e:
+            logger.error(f"Error saving configuration: {str(e)}")
     
     @property
     def embedding_model(self) -> str:
