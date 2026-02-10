@@ -4,7 +4,7 @@ import os
 
 def main():
     # Add project root to PYTHONPATH
-    project_root = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     env = os.environ.copy()
     env['PYTHONPATH'] = project_root + os.pathsep + env.get('PYTHONPATH', '')
     

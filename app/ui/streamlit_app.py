@@ -101,7 +101,7 @@ def init_session_state():
 @st.cache_data(ttl=60, show_spinner="Connecting...")
 def check_ollama_status():
     """Check if Ollama is running and model is available. Cached for 60 seconds."""
-    from app.core.llm_client import OllamaClient
+    from app.core.llm.llm_client import OllamaClient
     client = OllamaClient()
     try:
         # First check if Ollama is running
@@ -124,7 +124,7 @@ def check_ollama_status():
 @st.cache_data(ttl=3600, show_spinner="Fetching Groq models...")
 def get_groq_models(api_key):
     """Fetch Groq models and cache for 1 hour."""
-    from app.core.llm_client import GroqClient
+    from app.core.llm.llm_client import GroqClient
     try:
         temp_client = GroqClient(api_key=api_key, model="llama-3.3-70b-versatile")
         return temp_client.list_models()
@@ -233,11 +233,11 @@ def render_sidebar():
                 st.warning("⚠️ Please enter your Groq API Key.")
 
         # 3. Apply Engine Settings to Global Client
-        from app.core.llm_client import set_llm_client
+        from app.core.llm.llm_client import set_llm_client
         try:
             if engine_type == "Ollama" and selected_model:
                 set_llm_client("Ollama")
-                from app.core.llm_client import get_llm_client
+                from app.core.llm.llm_client import get_llm_client
                 get_llm_client().model = selected_model
                 st.session_state.engine_ready = True
             elif engine_type == "Local GGUF" and selected_model:

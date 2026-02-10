@@ -4,11 +4,11 @@ from typing import List, Dict, Any, Optional
 from pathlib import Path
 
 from app.core.config import config
-from app.core.document_processor import DocumentProcessor, ProcessedDocument
-from app.core.embedding_engine import embedding_engine
-from app.core.vector_store import vector_store
-from app.core.retriever import retriever, SearchResult
-from app.core.llm_client import get_llm_client, ChatResponse, RAGContext
+from app.core.indexing.document_processor import DocumentProcessor, ProcessedDocument
+from app.core.retrieval.embedding_engine import embedding_engine
+from app.core.retrieval.vector_store import vector_store
+from app.core.retrieval.retriever import retriever, SearchResult
+from app.core.llm.llm_client import get_llm_client, ChatResponse, RAGContext
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

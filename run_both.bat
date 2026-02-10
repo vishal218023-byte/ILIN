@@ -65,13 +65,13 @@ echo - Close the windows to stop the services.
 echo(
 
 REM Start API in a new window
-start "ILIN API Server" cmd /k "call venv\Scripts\activate.bat && python run_api.py"
+start "ILIN API Server" cmd /k "call venv\Scripts\activate.bat && python app\scripts\run_api.py"
 
 REM Small delay to let API initialize
 timeout /t 3 /nobreak >nul
 
 REM Start UI in a new window
-start "ILIN Web UI" cmd /k "call venv\Scripts\activate.bat && set PYTHONPATH=%CD% && python run_ui.py"
+start "ILIN Web UI" cmd /k "call venv\Scripts\activate.bat && set PYTHONPATH=%CD% && python app\scripts\run_ui.py"
 
 echo(
 echo All services launched successfully!

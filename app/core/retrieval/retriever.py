@@ -7,8 +7,8 @@ from collections import defaultdict
 import math
 
 from app.core.config import config
-from app.core.embedding_engine import embedding_engine
-from app.core.vector_store import vector_store
+from app.core.retrieval.embedding_engine import embedding_engine
+from app.core.retrieval.vector_store import vector_store
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
