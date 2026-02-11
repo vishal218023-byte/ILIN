@@ -4,12 +4,20 @@ import logging
 from pathlib import Path
 from typing import Dict, Any, List
 
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
 class Config:
-    def __init__(self, config_path: str = "config.yaml"):
+    def __init__(self, config_path: str = None):
+        if config_path is None:
+            # Default to app/config.yaml relative to this file
+            config_path = str(Path(__file__).parent.parent / "config.yaml")
         self.config_path = config_path
         self.config = self._load_config()
         
@@ -98,6 +106,16 @@ class Config:
     @property
     def supported_extensions(self) -> List[str]:
         return self.get('documents.supported_extensions', ['.txt', '.pdf', '.docx', '.md'])
+
+    @property
+    def groq_api_key(self) -> str:
+        """Get Groq API key from environment variable."""
+        return os.getenv('GROQ_API_KEY', '')
+
+    @property
+    def nvidia_api_key(self) -> str:
+        """Get Nvidia API key from environment variable."""
+        return os.getenv('NVIDIA_API_KEY', '')
 
 
 config = Config()

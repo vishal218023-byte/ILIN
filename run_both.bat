@@ -10,7 +10,7 @@ echo ==========================================
 echo(
 
 REM 1. Check for Virtual Environment
-echo [1/3] Checking virtual environment...
+echo [1/2] Checking virtual environment...
 if not exist "venv" (
     echo [MISSING] Virtual environment not found.
     echo Creating virtual environment now...
@@ -26,7 +26,7 @@ if not exist "venv" (
 )
 
 REM 2. Check and Install Requirements
-echo [2/3] Checking requirements (this may take a moment)...
+echo [2/2] Checking requirements (this may take a moment)...
 call venv\Scripts\activate.bat
 python -m pip install -r requirements.txt --quiet
 if errorlevel 1 (
@@ -35,20 +35,6 @@ if errorlevel 1 (
     exit /b 1
 )
 echo [OK] Requirements are satisfied.
-
-REM 3. Check for Ollama
-echo [3/3] Checking Ollama connection...
-python -c "import requests; requests.get('http://localhost:11434/api/tags', timeout=2)" >nul 2>&1
-if not errorlevel 1 (
-    echo [OK] Ollama is running.
-    goto :LaunchServices
-)
-
-echo [WARNING] Ollama is not detected at http://localhost:11434
-echo Please ensure Ollama is running (ollama serve).
-echo(
-choice /C YN /M "Do you want to continue anyway"
-if errorlevel 2 exit /b 1
 
 :LaunchServices
 
@@ -59,7 +45,8 @@ echo   Launching Services...
 echo ==========================================
 echo(
 echo API Server: http://localhost:8000
-echo Web UI:     http://localhost:8501
+echo Web UI:     http://localhost:8501 (Local)
+echo             http://0.0.0.0:8501 (Network)
 echo(
 echo - Close the windows to stop the services.
 echo(

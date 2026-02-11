@@ -4,6 +4,7 @@ title ILIN Web UI
 echo ==========================================
 echo   ILIN Web Interface
 echo   http://localhost:8501
+echo   Network: http://0.0.0.0:8501
 echo ==========================================
 echo.
 
@@ -28,18 +29,20 @@ echo.
     choice /C YN /M "Do you want to continue in direct mode"
     if errorlevel 2 exit /b 1
     echo.
-    echo Starting UI in DIRECT mode (bypassing API)...
+    echo Starting UI in DIRECT mode ^(bypassing API^)...
     set PYTHONPATH=%CD%
-    streamlit run app\\ui\\streamlit_app.py --server.port 8501 --server.address localhost
+    streamlit run app\\ui\\streamlit_app.py --server.port 8501 --server.address 0.0.0.0
 ) else (
     echo [✓] API server is running
 echo.
     echo Starting Web UI...
+    echo Local: http://localhost:8501
+    echo Network: http://0.0.0.0:8501
     echo Press Ctrl+C to stop
 echo.
-    
+
     set PYTHONPATH=%CD%
-    streamlit run app\\ui\\streamlit_app.py --server.port 8501 --server.address localhost
+    streamlit run app\\ui\\streamlit_app.py --server.port 8501 --server.address 0.0.0.0
 )
 
 if errorlevel 1 (

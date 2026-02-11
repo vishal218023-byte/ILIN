@@ -80,7 +80,8 @@ class RAGPipeline:
         search_mode: Optional[str] = None,
         top_k: Optional[int] = None,
         stream: bool = False,
-        use_rag: bool = True
+        use_rag: bool = True,
+        chat_history: Optional[List[Dict[str, str]]] = None
     ) -> Dict[str, Any]:
         logger.info(f"Processing query (RAG={use_rag}): {question}")
         
@@ -110,7 +111,7 @@ class RAGPipeline:
         
         if not search_results:
             return {
-                'answer': "I don't have enough information to answer this question based on the available documents.",
+                'answer': "Your question is out of the knowledge space.",
                 'sources': [],
                 'search_results': []
             }
@@ -127,12 +128,12 @@ class RAGPipeline:
         
         if stream:
             return {
-                'stream': get_llm_client().chat_with_rag(question, contexts, stream=True),
+                'stream': get_llm_client().chat_with_rag(question, contexts, chat_history=chat_history, stream=True),
                 'sources': self._format_sources(search_results),
                 'search_results': self._format_search_results(search_results)
             }
         else:
-            response = get_llm_client().chat_with_rag(question, contexts, stream=False)
+            response = get_llm_client().chat_with_rag(question, contexts, chat_history=chat_history, stream=False)
             
             return {
                 'answer': response.content,
@@ -165,9 +166,22 @@ class RAGPipeline:
     
     def delete_document(self, document_id: str) -> bool:
         try:
+            # 1. Get file path before deleting from database
+            file_path = vector_store.get_document_path(document_id)
+            
+            # 2. Delete from vector store and database
             vector_store.remove_document(document_id)
             retriever.refresh_index()
-            logger.info(f"Deleted document: {document_id}")
+            
+            # 3. Delete physical file if it exists
+            if file_path and os.path.exists(file_path):
+                try:
+                    os.remove(file_path)
+                    logger.info(f"Deleted physical file: {file_path}")
+                except Exception as file_error:
+                    logger.warning(f"Could not delete physical file {file_path}: {str(file_error)}")
+            
+            logger.info(f"Successfully deleted document: {document_id}")
             return True
         except Exception as e:
             logger.error(f"Error deleting document {document_id}: {str(e)}")

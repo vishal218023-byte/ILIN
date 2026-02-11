@@ -32,7 +32,7 @@ class LLMClient(ABC):
         pass
 
     @abstractmethod
-    def chat_with_rag(self, question: str, contexts: List[RAGContext], stream: bool = False) -> Any:
+    def chat_with_rag(self, question: str, contexts: List[RAGContext], chat_history: Optional[List[Dict[str, str]]] = None, stream: bool = False) -> Any:
         pass
 
     @abstractmethod
@@ -41,7 +41,17 @@ class LLMClient(ABC):
 
     def _get_rag_template(self) -> str:
         return """You are an intelligent assistant for the ILIN system.
-Base your answer ONLY on the provided context.
+Provide a direct, professional, and accurate response to the user's question.
+
+CRITICAL INSTRUCTION: 
+1. Use ONLY the information in the CONTEXT below.
+2. DO NOT use phrases like "Based on the provided context", "According to the document", or "The context states".
+3. Provide the answer directly as if you are a knowledgeable expert speaking naturally.
+4. If the context does not contain the answer, simply state: "Your question is out of the knowledge space."
+5. Consider the conversation history to maintain context and answer follow-up questions appropriately.
+
+CONVERSATION HISTORY:
+{chat_history}
 
 CONTEXT:
 {context}
@@ -55,6 +65,19 @@ Response:"""
         formatted = []
         for i, ctx in enumerate(contexts, 1):
             formatted.append(f"[Source {i}: {ctx.source}]\n{ctx.content}\n")
+        return "\n".join(formatted)
+
+    def _format_chat_history(self, chat_history: List[Dict[str, str]]) -> str:
+        if not chat_history:
+            return "No previous conversation."
+        formatted = []
+        for msg in chat_history:
+            role = msg.get('role', 'user')
+            content = msg.get('content', '')
+            if role == 'user':
+                formatted.append(f"User: {content}")
+            elif role == 'assistant':
+                formatted.append(f"Assistant: {content}")
         return "\n".join(formatted)
 
 class OllamaClient(LLMClient):
@@ -89,8 +112,12 @@ class OllamaClient(LLMClient):
                 data = json.loads(line)
                 yield ChatResponse(content=data.get('response', ''), sources=[], model=self.model, done=data.get('done', False))
 
-    def chat_with_rag(self, question: str, contexts: List[RAGContext], stream: bool = False):
-        prompt = self._get_rag_template().format(context=self._format_context(contexts), question=question)
+    def chat_with_rag(self, question: str, contexts: List[RAGContext], chat_history: Optional[List[Dict[str, str]]] = None, stream: bool = False):
+        prompt = self._get_rag_template().format(
+            chat_history=self._format_chat_history(chat_history or []),
+            context=self._format_context(contexts),
+            question=question
+        )
         return self.generate(prompt, stream=stream)
 
     def list_models(self) -> List[str]:
@@ -139,8 +166,12 @@ class LocalGGUFClient(LLMClient):
             yield ChatResponse(content=text, sources=[], model=self.model_name, done=False)
         yield ChatResponse(content="", sources=[], model=self.model_name, done=True)
 
-    def chat_with_rag(self, question: str, contexts: List[RAGContext], stream: bool = False):
-        prompt = self._get_rag_template().format(context=self._format_context(contexts), question=question)
+    def chat_with_rag(self, question: str, contexts: List[RAGContext], chat_history: Optional[List[Dict[str, str]]] = None, stream: bool = False):
+        prompt = self._get_rag_template().format(
+            chat_history=self._format_chat_history(chat_history or []),
+            context=self._format_context(contexts),
+            question=question
+        )
         return self.generate(prompt, stream=stream)
 
     def list_models(self) -> List[str]:
@@ -156,6 +187,19 @@ class GroqClient(LLMClient):
             raise ImportError("groq python package not installed. Please run: pip install groq")
             
         self.client = Groq(api_key=api_key)
+        self.model = model
+
+class NvidiaClient(LLMClient):
+    def __init__(self, api_key: str, model: str):
+        try:
+            from openai import OpenAI
+        except ImportError:
+            raise ImportError("openai python package not installed. Please run: pip install openai")
+            
+        self.client = OpenAI(
+            base_url="https://integrate.api.nvidia.com/v1",
+            api_key=api_key
+        )
         self.model = model
 
     def generate(self, prompt: str, system: Optional[str] = None, stream: bool = False):
@@ -176,8 +220,51 @@ class GroqClient(LLMClient):
             yield ChatResponse(content=content, sources=[], model=self.model, done=False)
         yield ChatResponse(content="", sources=[], model=self.model, done=True)
 
-    def chat_with_rag(self, question: str, contexts: List[RAGContext], stream: bool = False):
-        prompt = self._get_rag_template().format(context=self._format_context(contexts), question=question)
+    def chat_with_rag(self, question: str, contexts: List[RAGContext], chat_history: Optional[List[Dict[str, str]]] = None, stream: bool = False):
+        prompt = self._get_rag_template().format(
+            chat_history=self._format_chat_history(chat_history or []),
+            context=self._format_context(contexts),
+            question=question
+        )
+        return self.generate(prompt, stream=stream)
+
+    def list_models(self) -> List[str]:
+        try:
+            models = self.client.models.list()
+            return [m.id for m in models.data]
+        except Exception as e:
+            logger.error(f"Error fetching Nvidia models: {str(e)}")
+            return [
+                "nvidia/llama-3.1-nemotron-70b-instruct",
+                "meta/llama-3.1-405b-instruct",
+                "meta/llama-3.1-70b-instruct",
+                "meta/llama-3.1-8b-instruct"
+            ]
+
+    def generate(self, prompt: str, system: Optional[str] = None, stream: bool = False):
+        messages = []
+        if system: messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
+        
+        if stream:
+            return self._handle_stream(messages)
+            
+        completion = self.client.chat.completions.create(model=self.model, messages=messages)
+        return ChatResponse(content=completion.choices[0].message.content, sources=[], model=self.model, done=True)
+
+    def _handle_stream(self, messages):
+        stream = self.client.chat.completions.create(model=self.model, messages=messages, stream=True)
+        for chunk in stream:
+            content = chunk.choices[0].delta.content or ""
+            yield ChatResponse(content=content, sources=[], model=self.model, done=False)
+        yield ChatResponse(content="", sources=[], model=self.model, done=True)
+
+    def chat_with_rag(self, question: str, contexts: List[RAGContext], chat_history: Optional[List[Dict[str, str]]] = None, stream: bool = False):
+        prompt = self._get_rag_template().format(
+            chat_history=self._format_chat_history(chat_history or []),
+            context=self._format_context(contexts),
+            question=question
+        )
         return self.generate(prompt, stream=stream)
 
     def list_models(self) -> List[str]:
@@ -196,8 +283,10 @@ class LLMFactory:
             return OllamaClient()
         elif engine_type == "Local GGUF":
             return LocalGGUFClient(kwargs.get('model_path'))
-        elif engine_type == "Online API (Groq)":
+        elif engine_type == "Groq (Online)":
             return GroqClient(kwargs.get('api_key'), kwargs.get('model'))
+        elif engine_type == "Nvidia (Online)":
+            return NvidiaClient(kwargs.get('api_key'), kwargs.get('model'))
         else:
             raise ValueError(f"Unknown engine type: {engine_type}")
 

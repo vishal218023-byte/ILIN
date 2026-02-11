@@ -27,9 +27,10 @@ embedding:
   cache_dir: models
   device: cpu
   model: all-MiniLM-L6-v2
-last_engine: Online API (Groq)
+last_engine: Nvidia (Online)
 local_llm:
   context_window: 4048
+  last_model: Llama-3.2-3B-Instruct-Q4_K_M.gguf
   models_path: models
   threads: 4
 ollama:
@@ -41,8 +42,9 @@ ollama:
   timeout: 120
 online_api:
   groq:
-    api_key: ''
     default_model: llama-3.1-8b-instant
+  nvidia:
+    default_model: mistralai/mistral-7b-instruct-v0.3
 retrieval:
   enable_reranking: true
   hybrid_alpha: 0.7
@@ -51,7 +53,7 @@ retrieval:
   search_mode: hybrid
 ui:
   max_upload_size: 50
-  page_icon: 🧠
+  page_icon: app/ui/assets/Icon.png
   page_title: ILIN - Intelligence Node
 vector_store:
   index_path: data/vector_indices/

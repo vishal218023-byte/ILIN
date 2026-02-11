@@ -331,7 +331,7 @@ class VectorStore:
         cursor = conn.cursor()
         
         cursor.execute('''
-            SELECT document_id, filename, file_type, file_size, total_chunks, created_at
+            SELECT document_id, filename, file_type, file_size, total_chunks, created_at, file_path
             FROM documents
             ORDER BY created_at DESC
         ''')
@@ -341,6 +341,16 @@ class VectorStore:
         
         conn.close()
         return documents
+
+    def get_document_path(self, document_id: str) -> Optional[str]:
+        conn = sqlite3.connect(self.metadata_db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT file_path FROM documents WHERE document_id = ?", (document_id,))
+        result = cursor.fetchone()
+        
+        conn.close()
+        return result[0] if result else None
 
 
 vector_store = VectorStore()

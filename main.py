@@ -16,10 +16,10 @@ def run_ui():
     env['PYTHONPATH'] = project_root + os.pathsep + env.get('PYTHONPATH', '')
     
     subprocess.run([
-        sys.executable, "-m", "streamlit", "run", 
+        sys.executable, "-m", "streamlit", "run",
         "app/ui/streamlit_app.py",
         "--server.port", "8501",
-        "--server.address", "localhost"
+        "--server.address", "0.0.0.0"
     ], env=env)
 
 if __name__ == "__main__":
